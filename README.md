@@ -37,7 +37,7 @@ CROSS PLATFORM MULTI CLIENTS FUD RAT
     2. Linux
 
 # Contact:
-     https://t.me/R0ot1337
+     Telegram Group: https://t.me/machine1337
      
 # Warning:
     Use this tool Only for Educational Purpose And I will Not be Responsible For ur cruel act.
